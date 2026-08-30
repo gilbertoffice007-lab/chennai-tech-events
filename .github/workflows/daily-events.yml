@@ -1,36 +1,75 @@
-name: Daily Event Aggregation
+name: Chennai Tech Events Scanner
 
 on:
-  schedule:
-    # Runs at 09:00 UTC every day
-    - cron: "0 9 * * *"
   workflow_dispatch:
-    # Allow manual triggering
+
+  schedule:
+    # 8:00 AM IST
+    - cron: "30 2 * * *"
+
+    # 1:00 PM IST
+    - cron: "30 7 * * *"
+
+    # 6:00 PM IST
+    - cron: "30 12 * * *"
+
+    # 10:00 PM IST
+    - cron: "30 16 * * *"
+
 
 jobs:
-  aggregate:
+  scan-events:
+
     runs-on: ubuntu-latest
 
     steps:
+
+      # ==========================================
+      # CHECKOUT CODE
+      # ==========================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+
+      # ==========================================
+      # SETUP PYTHON
+      # ==========================================
+
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+
+      # ==========================================
+      # INSTALL DEPENDENCIES
+      # ==========================================
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r chennai-tech-events/requirements.txt
+          pip install -r requirements.txt
 
-      - name: Run event aggregator
-        run: |
-          cd chennai-tech-events
-          python -m src.main
+
+      # ==========================================
+      # RUN EVENT SCANNER
+      # ==========================================
+
+      - name: Run event scanner
+
         env:
+
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          MAX_EVENTS_PER_RUN: "20"
+
+        run: |
+
+          python -m src.main
