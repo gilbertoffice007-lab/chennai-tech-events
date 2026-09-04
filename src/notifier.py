@@ -25,6 +25,10 @@ def format_caption(
     status
 ):
 
+    # --------------------------------------------------------
+    # Header
+    # --------------------------------------------------------
+
     if status == "NEW":
 
         header = (
@@ -37,6 +41,10 @@ def format_caption(
             "🔔 CHENNAI TECH EVENT UPDATE"
         )
 
+
+    # --------------------------------------------------------
+    # Event information
+    # --------------------------------------------------------
 
     title = event.get(
         "title",
@@ -73,11 +81,40 @@ def format_caption(
     ) or "No description available."
 
 
-    # Telegram caption has length limits,
-    # so keep description reasonable.
+    # --------------------------------------------------------
+    # Clean values
+    # --------------------------------------------------------
 
-    description = description[:700]
+    title = str(title).strip()
+    category = str(category).strip()
+    organizer = str(organizer).strip()
+    location = str(location).strip()
+    event_date = str(event_date).strip()
+    deadline = str(deadline).strip()
+    published = str(published).strip()
+    description = str(description).strip()
 
+
+    # --------------------------------------------------------
+    # Telegram photo caption has a limited length.
+    # Keep it reasonably short.
+    # --------------------------------------------------------
+
+    description = description[:600]
+
+
+    # --------------------------------------------------------
+    # Create caption
+    #
+    # IMPORTANT:
+    # We intentionally DO NOT use parse_mode="HTML".
+    #
+    # This prevents characters such as:
+    # &, <, >
+    #
+    # inside scraped website content from causing
+    # Telegram 400 Bad Request errors.
+    # --------------------------------------------------------
 
     caption = f"""
 {header}
@@ -111,6 +148,72 @@ def format_caption(
 
 
 # ============================================================
+# CREATE INLINE BUTTONS
+# ============================================================
+
+def create_buttons(
+    registration_url=None,
+    source_url=None
+):
+
+    buttons = []
+
+
+    # --------------------------------------------------------
+    # Registration button
+    # --------------------------------------------------------
+
+    if registration_url:
+
+        registration_url = str(
+            registration_url
+        ).strip()
+
+        if registration_url:
+
+            buttons.append([
+                {
+                    "text": "🔗 Register Now",
+                    "url": registration_url
+                }
+            ])
+
+
+    # --------------------------------------------------------
+    # Source button
+    # --------------------------------------------------------
+
+    if source_url:
+
+        source_url = str(
+            source_url
+        ).strip()
+
+        if source_url:
+
+            buttons.append([
+                {
+                    "text": "📄 View Source",
+                    "url": source_url
+                }
+            ])
+
+
+    # --------------------------------------------------------
+    # Return Telegram format
+    # --------------------------------------------------------
+
+    if not buttons:
+
+        return None
+
+
+    return {
+        "inline_keyboard": buttons
+    }
+
+
+# ============================================================
 # SEND PHOTO
 # ============================================================
 
@@ -121,22 +224,53 @@ def send_photo(
     source_url=None
 ):
 
+    # --------------------------------------------------------
+    # Check token
+    # --------------------------------------------------------
+
     if not TELEGRAM_BOT_TOKEN:
 
         print(
-            "Telegram token missing."
+            "❌ Telegram bot token missing."
         )
 
         return False
+
+
+    # --------------------------------------------------------
+    # Check chat ID
+    # --------------------------------------------------------
 
     if not TELEGRAM_CHAT_ID:
 
         print(
-            "Telegram chat ID missing."
+            "❌ Telegram chat ID missing."
         )
 
         return False
 
+
+    # --------------------------------------------------------
+    # Check poster URL
+    # --------------------------------------------------------
+
+    if not poster_url:
+
+        print(
+            "❌ Poster URL missing."
+        )
+
+        return False
+
+
+    poster_url = str(
+        poster_url
+    ).strip()
+
+
+    # --------------------------------------------------------
+    # Telegram sendPhoto endpoint
+    # --------------------------------------------------------
 
     url = (
         f"{TELEGRAM_API}/sendPhoto"
@@ -147,33 +281,18 @@ def send_photo(
     # Inline buttons
     # --------------------------------------------------------
 
-    buttons = []
-
-    if registration_url:
-
-        buttons.append([
-            {
-                "text":
-                    "🔗 Register Now",
-
-                "url":
-                    registration_url
-            }
-        ])
+    reply_markup = create_buttons(
+        registration_url,
+        source_url
+    )
 
 
-    if source_url:
-
-        buttons.append([
-            {
-                "text":
-                    "📄 View Source",
-
-                "url":
-                    source_url
-            }
-        ])
-
+    # --------------------------------------------------------
+    # Payload
+    #
+    # IMPORTANT:
+    # No parse_mode.
+    # --------------------------------------------------------
 
     payload = {
 
@@ -184,22 +303,39 @@ def send_photo(
             poster_url,
 
         "caption":
-            caption,
-
-        "parse_mode":
-            "HTML"
+            caption
     }
 
 
-    if buttons:
+    # --------------------------------------------------------
+    # Add buttons if available
+    # --------------------------------------------------------
 
-        payload["reply_markup"] = {
-            "inline_keyboard":
-                buttons
-        }
+    if reply_markup:
 
+        payload["reply_markup"] = (
+            reply_markup
+        )
+
+
+    # --------------------------------------------------------
+    # Send request
+    # --------------------------------------------------------
 
     try:
+
+        print(
+            "📤 Sending poster to Telegram..."
+        )
+
+        print(
+            f"Poster URL: {poster_url}"
+        )
+
+        print(
+            f"Chat ID: {TELEGRAM_CHAT_ID}"
+        )
+
 
         response = requests.post(
             url,
@@ -207,21 +343,80 @@ def send_photo(
             timeout=30
         )
 
+
+        # ----------------------------------------------------
+        # DEBUG INFORMATION
+        # ----------------------------------------------------
+
+        print(
+            f"Telegram status: "
+            f"{response.status_code}"
+        )
+
+        print(
+            f"Telegram response: "
+            f"{response.text}"
+        )
+
+
+        # ----------------------------------------------------
+        # Check response
+        # ----------------------------------------------------
+
         response.raise_for_status()
 
+
+        print(
+            "✅ Telegram photo sent successfully."
+        )
+
         return True
+
+
+    except requests.exceptions.RequestException as error:
+
+        print(
+            "❌ Telegram request failed."
+        )
+
+        # ----------------------------------------------------
+        # Print Telegram's actual error
+        # ----------------------------------------------------
+
+        if error.response is not None:
+
+            print(
+                "Telegram HTTP status:",
+                error.response.status_code
+            )
+
+            print(
+                "Telegram error response:",
+                error.response.text
+            )
+
+
+        else:
+
+            print(
+                "No response received from Telegram."
+            )
+
+
+        return False
+
 
     except Exception as error:
 
         print(
-            f"Telegram error: {error}"
+            f"❌ Telegram error: {error}"
         )
 
         return False
 
 
 # ============================================================
-# SEND TEXT WHEN POSTER NOT AVAILABLE
+# SEND TEXT
 # ============================================================
 
 def send_text(
@@ -230,47 +425,57 @@ def send_text(
     source_url=None
 ):
 
+    # --------------------------------------------------------
+    # Check token
+    # --------------------------------------------------------
+
     if not TELEGRAM_BOT_TOKEN:
 
+        print(
+            "❌ Telegram bot token missing."
+        )
+
         return False
+
+
+    # --------------------------------------------------------
+    # Check chat ID
+    # --------------------------------------------------------
 
     if not TELEGRAM_CHAT_ID:
 
+        print(
+            "❌ Telegram chat ID missing."
+        )
+
         return False
 
+
+    # --------------------------------------------------------
+    # Telegram sendMessage endpoint
+    # --------------------------------------------------------
 
     url = (
         f"{TELEGRAM_API}/sendMessage"
     )
 
 
-    buttons = []
+    # --------------------------------------------------------
+    # Inline buttons
+    # --------------------------------------------------------
 
-    if registration_url:
-
-        buttons.append([
-            {
-                "text":
-                    "🔗 Register Now",
-
-                "url":
-                    registration_url
-            }
-        ])
+    reply_markup = create_buttons(
+        registration_url,
+        source_url
+    )
 
 
-    if source_url:
-
-        buttons.append([
-            {
-                "text":
-                    "📄 View Source",
-
-                "url":
-                    source_url
-            }
-        ])
-
+    # --------------------------------------------------------
+    # Payload
+    #
+    # IMPORTANT:
+    # No HTML parse mode.
+    # --------------------------------------------------------
 
     payload = {
 
@@ -278,22 +483,32 @@ def send_text(
             TELEGRAM_CHAT_ID,
 
         "text":
-            caption,
-
-        "parse_mode":
-            "HTML"
+            caption
     }
 
 
-    if buttons:
+    # --------------------------------------------------------
+    # Add buttons
+    # --------------------------------------------------------
 
-        payload["reply_markup"] = {
-            "inline_keyboard":
-                buttons
-        }
+    if reply_markup:
 
+        payload["reply_markup"] = (
+            reply_markup
+        )
+
+
+    # --------------------------------------------------------
+    # Send request
+    # --------------------------------------------------------
 
     try:
+
+        print(
+            "📤 Sending text notification "
+            "to Telegram..."
+        )
+
 
         response = requests.post(
             url,
@@ -301,14 +516,70 @@ def send_text(
             timeout=30
         )
 
+
+        # ----------------------------------------------------
+        # DEBUG INFORMATION
+        # ----------------------------------------------------
+
+        print(
+            f"Telegram status: "
+            f"{response.status_code}"
+        )
+
+        print(
+            f"Telegram response: "
+            f"{response.text}"
+        )
+
+
+        # ----------------------------------------------------
+        # Check response
+        # ----------------------------------------------------
+
         response.raise_for_status()
 
+
+        print(
+            "✅ Telegram text sent successfully."
+        )
+
         return True
+
+
+    except requests.exceptions.RequestException as error:
+
+        print(
+            "❌ Telegram request failed."
+        )
+
+
+        if error.response is not None:
+
+            print(
+                "Telegram HTTP status:",
+                error.response.status_code
+            )
+
+            print(
+                "Telegram error response:",
+                error.response.text
+            )
+
+
+        else:
+
+            print(
+                "No response received from Telegram."
+            )
+
+
+        return False
+
 
     except Exception as error:
 
         print(
-            f"Telegram error: {error}"
+            f"❌ Telegram error: {error}"
         )
 
         return False
