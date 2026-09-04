@@ -6,7 +6,8 @@ from .sources import (
 )
 
 from .extractor import (
-    parse_event
+    parse_event,
+    create_content_hash
 )
 
 from .poster import (
@@ -31,17 +32,40 @@ from .config import (
     MAX_EVENTS_PER_RUN
 )
 
-# Ensure UTF-8 console output on Windows
-try:
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
-except (AttributeError, OSError):
-    pass  # Older Python or non-Windows — encoding is usually fine
 
+# ============================================================
+# UTF-8 CONSOLE
+# ============================================================
+
+try:
+
+    sys.stdout.reconfigure(
+        encoding="utf-8"
+    )
+
+    sys.stderr.reconfigure(
+        encoding="utf-8"
+    )
+
+except (
+    AttributeError,
+    OSError
+):
+
+    pass
+
+
+# ============================================================
+# LOGGING
+# ============================================================
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    format=(
+        "%(asctime)s "
+        "[%(levelname)s] "
+        "%(name)s: %(message)s"
+    ),
 )
 
 
@@ -52,15 +76,19 @@ logging.basicConfig(
 def main():
 
     print()
+
     print(
         "=========================================="
     )
+
     print(
         "     CHENNAI TECH EVENTS SCANNER"
     )
+
     print(
         "=========================================="
     )
+
     print()
 
 
@@ -72,8 +100,8 @@ def main():
         fetch_all_sources()
     )
 
-
     print()
+
     print(
         f"Articles collected: "
         f"{len(raw_articles)}"
@@ -113,25 +141,31 @@ def main():
             article
         )
 
-
         if event is None:
 
             continue
 
 
         # ----------------------------------------------------
-        # Prevent duplicate articles
+        # Event ID
         # ----------------------------------------------------
 
-        event_id = event[
+        event_id = event.get(
             "event_id"
-        ]
+        )
 
+        if not event_id:
+
+            continue
+
+
+        # ----------------------------------------------------
+        # Prevent duplicates in current run
+        # ----------------------------------------------------
 
         if event_id in processed_event_ids:
 
             continue
-
 
         processed_event_ids.add(
             event_id
@@ -139,9 +173,10 @@ def main():
 
 
         print()
+
         print(
             f"Processing: "
-            f"{event['title']}"
+            f"{event.get('title', 'Untitled')}"
         )
 
 
@@ -149,17 +184,30 @@ def main():
         # STEP 3 — POSTER
         # ====================================================
 
-        poster_url = (
-            process_poster(
-
-                event[
-                    "source_url"
-                ],
-
-                event_id
-            )
+        poster_result = process_poster(
+            event.get("source_url"),
+            event_id
         )
 
+        poster_url = None
+
+        poster_bytes = None
+
+
+        if poster_result:
+
+            poster_url = poster_result.get(
+                "url"
+            )
+
+            poster_bytes = poster_result.get(
+                "bytes"
+            )
+
+
+        # ----------------------------------------------------
+        # Save poster URL
+        # ----------------------------------------------------
 
         if poster_url:
 
@@ -169,10 +217,6 @@ def main():
 
 
             # Recalculate content hash
-            from .extractor import (
-                create_content_hash
-            )
-
             event[
                 "content_hash"
             ] = create_content_hash(
@@ -188,10 +232,9 @@ def main():
             event
         )
 
-
-        status = result[
+        status = result.get(
             "status"
-        ]
+        )
 
 
         # ====================================================
@@ -228,14 +271,19 @@ def main():
 
 
         # ====================================================
-        # SEND POSTER
+        # SEND TELEGRAM
         # ====================================================
 
-        if poster_url:
+        if poster_bytes:
+
+            print(
+                "📤 Sending poster directly "
+                "to Telegram..."
+            )
 
             success = send_photo(
 
-                poster_url,
+                poster_bytes,
 
                 caption,
 
@@ -249,6 +297,11 @@ def main():
             )
 
         else:
+
+            print(
+                "📤 No poster available. "
+                "Sending text..."
+            )
 
             success = send_text(
 
@@ -292,12 +345,18 @@ def main():
                 "✗ Telegram notification failed"
             )
 
+            print(
+                "The event was NOT marked "
+                "as notification sent."
+            )
+
 
     # ========================================================
     # SUMMARY
     # ========================================================
 
     print()
+
     print(
         "=========================================="
     )
